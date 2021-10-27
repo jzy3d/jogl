@@ -1,6 +1,6 @@
 # Building JOGL 2.4 for MacOS M1 with ARM64
 
-This explain how to build JOGL 2.4 for Mac M1 with ARM64 processor.
+This explain how to build JOGL 2.4 for Mac M1 with ARM64 processor and then extend the existing multiplatform release.
 
 ## Repositories
 
@@ -25,7 +25,7 @@ May be usefull
 ## JDK requirements
 
 * An [ARM-aware JDK 8](https://www.azul.com/downloads/?version=java-8-lts&os=macos&architecture=arm-64-bit&package=jdk) is required to provide a rt.jar reference while building Gluegen and JOGL
-* An [ARM-aware JDK 1](https://www.azul.com/downloads/?version=java-11-lts&os=macos&architecture=arm-64-bit&package=jdk) is required to be able to read OpenJFX classes which are provided in JOGL dependencies.
+* An [ARM-aware JDK 11](https://www.azul.com/downloads/?version=java-11-lts&os=macos&architecture=arm-64-bit&package=jdk) is required to be able to read OpenJFX classes which are provided in JOGL dependencies.
 
 
 
@@ -39,16 +39,18 @@ Reminder : as stated in build doc, keep the same console for building Gluegen an
 
 As [suggested by Manu](https://forum.jogamp.org/JOGL-for-Mac-ARM-Silicon-td4040887.html)
 > There was no problem to compile Gluegen but the generated .dylib file was for x86_64, not arm64. Therefore, I replaced `x86_64` by `arm64` in `gluegen/make/gluegen-cpptasks-base.xml` file in the two following lines:
-
 ```xml
 <compilerarg value="x86_64" if="use.macosx64"/>
 <linkerarg value="x86_64" if="use.macosx64"/>
 ```
-> and that was enough to get `libgluegen_rt.dylib` for arm64 architecture (info checked with "lipo" command).
+> Yielding to
+```xml
+<compilerarg value="arm64" if="use.macosx64"/>
+<linkerarg value="arm64" if="use.macosx64"/>
+```
+> and that was enough to get `libgluegen_rt.dylib` for arm64 architecture (info checked with `lipo` command).
 I even succeed to create a "universal" .dylib file which combines both architectures with the command:
 `lipo libgluegen_rt-arm64.dylib libgluegen_rt-x86_64.dylib -output libgluegen_rt.dylib -create`
-
-But let's package after building JOGL.
 
 ### Configure
 
@@ -77,6 +79,14 @@ lipo ../../gluegen/build/obj/libgluegen_rt.dylib -archs
 should output
 > `arm64`
 
+#### Check jar file is for appropriate architecture
+
+```
+cd ../build
+jar xf gluegen-rt-natives-macosx-universal.jar natives/macosx-universal/
+lipo natives/macosx-universal/libgluegen_rt.dylib -archs
+```
+
 #### Run unit tests
 
 ```
@@ -92,9 +102,7 @@ Keep the same console open for building JOGL.
 
 #### Missing swt
 
-Get from Maven, then copy jar in make/lib/swt/cocoa-macosx-aarch64
-
-Edit `build-common.xml` as follow
+I get the SWT jar for MacOSX Aarch64 from my local maven repo and add it to the JOGL dependencies folder. I then edit `build-common.xml` as follow
 
 ```xml
 <!--<property name="swt-cocoa-macosx-x86_64.jar" value="${project.root}/make/lib/swt/cocoa-macosx-x86_64/swt.jar"/>
@@ -145,32 +153,120 @@ ant -Dtarget.sourcelevel=1.8 -Dtarget.targetlevel=1.8 -Dtarget.rt.jar=/Library/J
 
 ### Make a single DYLIB file for x86-64 + arm64
 
+#### Move existing pre-build x86_64 lib in a dedicated folder
 ```shell
-# Move existing pre-build lib to a better named place
 mkdir jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-x86-64
 
 mv jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib/* jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-x86-64
+```
 
-# Copy what we built next
+Verify we bundled only x86_64 libs : running the below command should output `x86_64` for each lib.
+
+```shell
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-x86-64/libgluegen_rt.dylib -archs       
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-x86-64/libjogl_desktop.dylib -archs   
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-x86-64/libnativewindow_macosx.dylib -archs
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-x86-64/libjogl_cg.dylib -archs          
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-x86-64/libnativewindow_awt.dylib -archs
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-x86-64/libjogl_mobile.dylib -archs         
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-x86-64/libnewt_head.dylib -archs
+```
+
+#### Copy the arm64 lib in a dedicated folder
+```shell
 mkdir jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-arm64/
 cp jogl/build/lib/* jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-arm64/
 cp gluegen/build/obj/libgluegen_rt.dylib jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-arm64/
-
-# Merge these libraries
-cd jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/
-
-lipo lib-arm64/libgluegen_rt.dylib           lib-x86-64/libgluegen_rt.dylib          -output libgluegen_rt.dylib          -create   
-lipo lib-arm64/libjogl_cg.dylib              lib-x86-64/libjogl_cg.dylib             -output libjogl_cg.dylib             -create   
-#lipo lib-arm64/libjogl_desktop.dylib         lib-x86-64/libjogl_desktop.dylib        -output libjogl_desktop.dylib        -create   
-lipo lib-arm64/libjogl_mobile.dylib          lib-x86-64/libjogl_mobile.dylib         -output libjogl_mobile.dylib         -create   
-#lipo lib-arm64/libnativewindow_awt.dylib     lib-x86-64/libnativewindow_awt.dylib    -output libnativewindow_awt.dylib    -create   
-lipo lib-arm64/libnativewindow_macosx.dylib  lib-x86-64/libnativewindow_macosx.dylib -output libnativewindow_macosx.dylib -create   
-lipo lib-arm64/libnewt_head.dylib            lib-x86-64/libnewt_head.dylib           -output libnewt_head.dylib           -create   
-
-# commented dylib are actually empty in arm64
-lipo libjogl_cg.dylib -archs
-
 ```
+
+Verify we bundled only arm64 libs : running the below command should output `arm64` for each lib.
+
+```shell
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-arm64/libgluegen_rt.dylib -archs       
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-arm64/libjogl_desktop.dylib -archs   
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-arm64/libnativewindow_macosx.dylib -archs
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-arm64/libjogl_cg.dylib -archs          
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-arm64/libnativewindow_awt.dylib -archs
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-arm64/libjogl_mobile.dylib -archs         
+lipo jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-arm64/libnewt_head.dylib -archs
+```
+
+#### Create a single dylib suitable for both architectures
+
+```shell
+cd jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/
+mkdir natives
+mkdir natives/macosx-universal
+```
+
+```shell
+lipo lib-arm64/libgluegen_rt.dylib           lib-x86-64/libgluegen_rt.dylib          -output natives/macosx-universal/libgluegen_rt.dylib          -create   
+lipo lib-arm64/libjogl_cg.dylib              lib-x86-64/libjogl_cg.dylib             -output natives/macosx-universal/libjogl_cg.dylib             -create   
+lipo lib-arm64/libjogl_desktop.dylib         lib-x86-64/libjogl_desktop.dylib        -output natives/macosx-universal/libjogl_desktop.dylib        -create   
+lipo lib-arm64/libjogl_mobile.dylib          lib-x86-64/libjogl_mobile.dylib         -output natives/macosx-universal/libjogl_mobile.dylib         -create   
+lipo lib-arm64/libnativewindow_awt.dylib     lib-x86-64/libnativewindow_awt.dylib    -output natives/macosx-universal/libnativewindow_awt.dylib    -create   
+lipo lib-arm64/libnativewindow_macosx.dylib  lib-x86-64/libnativewindow_macosx.dylib -output natives/macosx-universal/libnativewindow_macosx.dylib -create   
+lipo lib-arm64/libnewt_head.dylib            lib-x86-64/libnewt_head.dylib           -output natives/macosx-universal/libnewt_head.dylib           -create   
+```
+
+Verify we bundled arm64+x86_64 libs : running the below command should output `x86_64 arm64` for each lib.
+
+```shell
+lipo natives/macosx-universal/libjogl_cg.dylib -archs       
+lipo natives/macosx-universal/libjogl_desktop.dylib -archs   
+lipo natives/macosx-universal/libnativewindow_macosx.dylib -archs
+lipo natives/macosx-universal/libjogl_cg.dylib -archs          
+lipo natives/macosx-universal/libnativewindow_awt.dylib -archs
+lipo natives/macosx-universal/libjogl_mobile.dylib -archs         
+lipo natives/macosx-universal/libnewt_head.dylib -archs
+```
+
+
+#### Update jars of existing distribution with the merged dylib files
+
+```shell
+mkdir jar.bak
+cp -r jar/* jar.bak/
+```
+
+```shell
+jar uf ../../jar/gluegen-rt-android-natives-macosx-universal.jar  natives/macosx-universal/libgluegen_rt.dylib
+
+jar uf ../../jar/gluegen-rt-natives-macosx-universal.jar          natives/macosx-universal/libgluegen_rt.dylib
+
+jar uf ../../jar/jogl-all-natives-macosx-universal.jar    natives/macosx-universal/libjogl_desktop.dylib
+jar uf ../../jar/jogl-all-natives-macosx-universal.jar    natives/macosx-universal/libjogl_mobile.dylib
+jar uf ../../jar/jogl-all-natives-macosx-universal.jar    natives/macosx-universal/libnativewindow_macosx.dylib
+jar uf ../../jar/jogl-all-natives-macosx-universal.jar    natives/macosx-universal/libnativewindow_awt.dylib
+jar uf ../../jar/jogl-all-natives-macosx-universal.jar    natives/macosx-universal/libnewt_head.dylib
+
+jar uf ../../jar/jogl-all-noawt-natives-macosx-universal.jar    natives/macosx-universal/libjogl_mobile.dylib
+jar uf ../../jar/jogl-all-noawt-natives-macosx-universal.jar    natives/macosx-universal/libjogl_mobile.dylib
+jar uf ../../jar/jogl-all-noawt-natives-macosx-universal.jar    natives/macosx-universal/libnativewindow_awt.dylib
+jar uf ../../jar/jogl-all-noawt-natives-macosx-universal.jar    natives/macosx-universal/libnativewindow_macosx.dylib
+jar uf ../../jar/jogl-all-noawt-natives-macosx-universal.jar    natives/macosx-universal/libnewt_head.dylib
+
+# left for later :
+# jogl-all-android-natives-macosx-universal.jar
+# jogl-all-mobile-natives-macosx-universal.jar
+# joal-natives-macosx-universal.jar
+# jocl-android-natives-macosx-universal.jar
+# jocl-natives-macosx-universal.jar
+# jogl-all-android-natives-macosx-universal.jar
+# jogl-all-mobile-natives-macosx-universal.jar
+```
+
+
+
+Check jar where updated properly
+
+```shell
+ls -ahl ../../jar/ | grep macosx
+```
+
+Verify in a Maven project
+
+
 
 
 ## Make a Maven archive
