@@ -157,7 +157,7 @@ ant -Dtarget.sourcelevel=1.8 -Dtarget.targetlevel=1.8 -Dtarget.rt.jar=/Library/J
 ```shell
 mkdir jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-x86-64
 
-mv jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib/* jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-x86-64
+mv jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib* jogamp-scripting/input/jogamp-all-platforms/lib/macosx-universal/lib-x86-64
 ```
 
 Verify we bundled only x86_64 libs : running the below command should output `x86_64` for each lib.
