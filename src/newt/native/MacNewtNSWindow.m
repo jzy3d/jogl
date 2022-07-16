@@ -848,7 +848,9 @@ NS_ENDHANDLER
         insetsChangedID && sizeScreenPosInsetsChangedID &&
         screenPositionChangedID && focusChangedID && windowDestroyNotifyID && requestFocusID && windowRepaintID)
     {
-        CKCH_CreateDictionaries();
+        dispatch_async(dispatch_get_main_queue(), ^(){
+            CKCH_CreateDictionaries();
+        });
         return YES;
     }
     return NO;
