@@ -648,7 +648,7 @@ void updateContext(NSOpenGLContext* ctx) {
   NSView *nsView = [ctx view];
   if(NULL != nsView) {
       DBG_PRINT("updateContext.0: ctx %p, ctx.view %p\n", ctx, nsView);
-      [ctx update];
+      [ctx performSelectorOnMainThread:@selector(update) withObject:nil waitUntilDone:NO];
       DBG_PRINT("updateContext.X\n");
   }
   [pool release];
